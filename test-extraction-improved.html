@@ -1,0 +1,383 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PDF Extraction Test - With Y-Coordinate Tracking</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1400px;
+            margin: 20px auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+            border-bottom: 3px solid #4CAF50;
+            padding-bottom: 10px;
+        }
+        button {
+            background: #4CAF50;
+            color: white;
+            padding: 12px 24px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+            margin: 10px 5px;
+            transition: background 0.3s;
+        }
+        button:hover {
+            background: #45a049;
+        }
+        .result {
+            background: #f9f9f9;
+            padding: 15px;
+            margin: 15px 0;
+            border-radius: 5px;
+            border-left: 4px solid #4CAF50;
+        }
+        .error {
+            background: #ffebee;
+            border-left-color: #f44336;
+            color: #c62828;
+        }
+        .success {
+            background: #e8f5e9;
+            border-left-color: #4CAF50;
+            color: #2e7d32;
+        }
+        .warning {
+            background: #fff3e0;
+            border-left-color: #ff9800;
+            color: #e65100;
+        }
+        pre {
+            white-space: pre-wrap;
+            word-wrap: break-word;
+            background: #263238;
+            color: #aed581;
+            padding: 15px;
+            border-radius: 5px;
+            overflow-x: auto;
+            font-size: 12px;
+            line-height: 1.5;
+        }
+        .highlight {
+            background: yellow;
+            padding: 2px 4px;
+            font-weight: bold;
+        }
+        .field-result {
+            display: inline-block;
+            padding: 8px 16px;
+            margin: 5px;
+            border-radius: 20px;
+            font-weight: bold;
+        }
+        .field-success {
+            background: #4CAF50;
+            color: white;
+        }
+        .field-fail {
+            background: #f44336;
+            color: white;
+        }
+        textarea {
+            width: 100%;
+            height: 300px;
+            font-family: monospace;
+            font-size: 12px;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+        }
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin: 20px 0;
+        }
+        .stat-card {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px;
+            border-radius: 10px;
+            text-align: center;
+        }
+        .stat-value {
+            font-size: 32px;
+            font-weight: bold;
+            margin: 10px 0;
+        }
+        .stat-label {
+            font-size: 14px;
+            opacity: 0.9;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔍 PDF Extraction Test - Improved Version</h1>
+        <p><strong>This tool uses the FIXED extraction method with Y-coordinate tracking</strong></p>
+        
+        <div style="margin: 20px 0;">
+            <input type="file" id="fileInput" accept=".pdf" style="padding: 10px;">
+            <button onclick="testExtraction()">🚀 Test Extraction</button>
+            <button onclick="copyText()">📋 Copy Full Text</button>
+        </div>
+        
+        <div id="results"></div>
+    </div>
+
+    <script type="module">
+        import * as pdfjsLib from 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.0.379/pdf.min.mjs';
+        
+        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.0.379/pdf.worker.min.mjs';
+
+        let extractedFullText = '';
+
+        // IMPROVED TEXT EXTRACTION WITH Y-COORDINATE TRACKING
+        async function extractTextFromPDF(file) {
+            const arrayBuffer = await file.arrayBuffer();
+            const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+            
+            let fullText = '';
+            
+            for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
+                const page = await pdf.getPage(pageNum);
+                const textContent = await page.getTextContent();
+                
+                // IMPROVED: Preserve line structure based on Y-coordinates
+                let lastY = null;
+                let pageText = '';
+                
+                textContent.items.forEach((item, index) => {
+                    const currentY = item.transform[5]; // Y coordinate
+                    
+                    // If Y position changed significantly, add line break
+                    if (lastY !== null && Math.abs(currentY - lastY) > 5) {
+                        pageText += '\n';
+                    } else if (index > 0 && item.str.trim()) {
+                        // Add space between items on same line
+                        pageText += ' ';
+                    }
+                    
+                    pageText += item.str;
+                    lastY = currentY;
+                });
+                
+                fullText += pageText + '\n\n';
+            }
+            
+            return fullText;
+        }
+
+        // Extract Name
+        function extractName(text) {
+            const namePatterns = [
+                /Name\s*:?\s*\n?\s*([A-Z][A-Za-z\s.'-]{2,50}?)\s*\n\s*Registration/i,
+                /Name\s*:\s*\n?\s*([A-Z][A-Za-z\s.'-]{2,50}?)\s+Registration/i,
+                /Name\s*:?\s*\n?\s*([A-Z][A-Za-z\s.'-]{2,50}?)\s+(?:CNIC|Registration|NTN)/i,
+                /Name\s*:?\s*\n?\s*([A-Z][A-Za-z\s.'-]{2,50}?)\s+Address/i,
+                /Name\s*:?\s*\n\s*([A-Z][A-Za-z\s.'-]{2,50}?)\s*\n\s*(?:Address|Registration|CNIC)/i,
+                /Name\s*:\s*([A-Z][A-Za-z\s.'-]+?)(?=\s*(?:Registration|Address|CNIC|NTN|\n\s*\n))/i,
+            ];
+            
+            for (const pattern of namePatterns) {
+                const match = text.match(pattern);
+                if (match && match[1]) {
+                    let name = match[1].trim().replace(/\s+/g, ' ');
+                    name = name.replace(/\s*(Address|Registration|Contact|NEAR|Village|CNIC|NTN|Tax|Year|No).*$/i, '');
+                    
+                    if (name === name.toUpperCase() && name.length > 3) {
+                        name = name.split(' ')
+                            .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+                            .join(' ');
+                    }
+                    
+                    name = name.trim();
+                    
+                    if (name.length >= 2 && name.length <= 50 && /^[A-Za-z\s.'"-]+$/.test(name) && !/\d/.test(name)) {
+                        return name;
+                    }
+                }
+            }
+            return null;
+        }
+
+        // Extract CNIC/NTN
+        function extractCNICOrNTN(text) {
+            const ntnPatterns = [
+                /Registration\s+No\.?\s*:?\s*\n\s*(\d{10,13})/i,
+                /Registration\s+No\.?\s*(\d{10,13})/i,
+                /Registration\s+No\.?\s*:?\s*(\d{10,13})/i,
+                /Registration[:\s]*No\.?[:\s\n]*(\d{10,13})/i,
+                /Registration[^0-9]{0,30}(\d{10,13})/i,
+                /NTN\s*:?\s*\n?\s*(\d{7,13})/i,
+            ];
+            
+            for (const pattern of ntnPatterns) {
+                const match = text.match(pattern);
+                if (match && match[1]) {
+                    const ntn = match[1].replace(/\s/g, '');
+                    if (ntn.length >= 7 && ntn.length <= 13) {
+                        return ntn;
+                    }
+                }
+            }
+            return null;
+        }
+
+        // Extract Tax Year
+        function extractTaxYear(text) {
+            const taxYearPatterns = [
+                /Tax\s+Year\s*:?\s*\n\s*(\d{4})/i,
+                /Tax\s+Year\s*:\s*(\d{4})/i,
+                /Tax\s+Year\s*[:\-]?\s*(\d{4})/i,
+                /(?:Assessment|Income)\s+Year\s*:?\s*\n?\s*(\d{4})/i,
+            ];
+            
+            for (const pattern of taxYearPatterns) {
+                const match = text.match(pattern);
+                if (match && match[1]) {
+                    const year = parseInt(match[1]);
+                    const currentYear = new Date().getFullYear();
+                    if (year >= 2000 && year <= currentYear + 1) {
+                        return year.toString();
+                    }
+                }
+            }
+            
+            // Fallback
+            const headerText = text.substring(0, 1000);
+            const yearMatches = headerText.match(/\b(20\d{2})\b/g);
+            if (yearMatches && yearMatches.length > 0) {
+                const currentYear = new Date().getFullYear();
+                const validYears = yearMatches
+                    .map(y => parseInt(y))
+                    .filter(year => year >= 2000 && year <= currentYear + 1)
+                    .sort((a, b) => b - a);
+                
+                if (validYears.length > 0) {
+                    return validYears[0].toString();
+                }
+            }
+            
+            return null;
+        }
+
+        window.testExtraction = async function() {
+            const fileInput = document.getElementById('fileInput');
+            const resultsDiv = document.getElementById('results');
+            
+            if (!fileInput.files || fileInput.files.length === 0) {
+                resultsDiv.innerHTML = '<div class="result error">⚠️ Please select a PDF file first.</div>';
+                return;
+            }
+            
+            const file = fileInput.files[0];
+            resultsDiv.innerHTML = '<div class="result">⏳ Processing PDF...</div>';
+            
+            try {
+                console.log('=== STARTING EXTRACTION ===');
+                
+                // Extract text with improved method
+                const fullText = await extractTextFromPDF(file);
+                extractedFullText = fullText;
+                
+                console.log('Extracted text length:', fullText.length);
+                console.log('First 1500 chars:', fullText.substring(0, 1500));
+                
+                // Extract fields
+                const name = extractName(fullText);
+                const cnicNtn = extractCNICOrNTN(fullText);
+                const taxYear = extractTaxYear(fullText);
+                
+                console.log('Name:', name);
+                console.log('CNIC/NTN:', cnicNtn);
+                console.log('Tax Year:', taxYear);
+                
+                const success = !!(name && cnicNtn && taxYear);
+                
+                // Show results
+                resultsDiv.innerHTML = `
+                    <div class="result ${success ? 'success' : 'error'}">
+                        <h2>${success ? '✅ Extraction Successful!' : '❌ Extraction Failed'}</h2>
+                        <div style="margin: 20px 0;">
+                            <span class="field-result ${name ? 'field-success' : 'field-fail'}">
+                                Name: ${name || 'NOT FOUND'}
+                            </span>
+                            <span class="field-result ${cnicNtn ? 'field-success' : 'field-fail'}">
+                                CNIC/NTN: ${cnicNtn || 'NOT FOUND'}
+                            </span>
+                            <span class="field-result ${taxYear ? 'field-success' : 'field-fail'}">
+                                Tax Year: ${taxYear || 'NOT FOUND'}
+                            </span>
+                        </div>
+                    </div>
+                    
+                    <div class="stats">
+                        <div class="stat-card">
+                            <div class="stat-label">Text Length</div>
+                            <div class="stat-value">${fullText.length}</div>
+                            <div class="stat-label">characters</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-label">Fields Found</div>
+                            <div class="stat-value">${[name, cnicNtn, taxYear].filter(Boolean).length}/3</div>
+                            <div class="stat-label">required fields</div>
+                        </div>
+                    </div>
+                    
+                    <div class="result">
+                        <h3>📄 Extracted Text (First 2000 characters):</h3>
+                        <pre>${fullText.substring(0, 2000).replace(/</g, '&lt;').replace(/>/g, '&gt;')}</pre>
+                    </div>
+                    
+                    <div class="result">
+                        <h3>📝 Full Extracted Text:</h3>
+                        <textarea readonly>${fullText}</textarea>
+                    </div>
+                    
+                    <div class="result warning">
+                        <h3>💡 Debugging Tips:</h3>
+                        <ul>
+                            <li>Check the browser console (F12) for detailed logs</li>
+                            <li>Look for "Name", "Registration", and "Tax Year" in the extracted text above</li>
+                            <li>If fields are present but not extracted, the pattern might need adjustment</li>
+                            <li>If fields are missing from text, the PDF might be scanned (image-based)</li>
+                        </ul>
+                    </div>
+                `;
+                
+            } catch (error) {
+                console.error('Extraction error:', error);
+                resultsDiv.innerHTML = `
+                    <div class="result error">
+                        <h3>❌ Error:</h3>
+                        <p><strong>${error.message}</strong></p>
+                        <pre>${error.stack}</pre>
+                    </div>
+                `;
+            }
+        };
+
+        window.copyText = function() {
+            if (extractedFullText) {
+                navigator.clipboard.writeText(extractedFullText);
+                alert('✅ Full text copied to clipboard!');
+            } else {
+                alert('⚠️ Please extract text first!');
+            }
+        };
+    </script>
+</body>
+</html>

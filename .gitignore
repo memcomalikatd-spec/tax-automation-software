@@ -1,0 +1,16 @@
+node_modules/
+dist/
+dist-electron/
+.venv/
+__pycache__/
+*.pyc
+.env
+*.db
+temp_uploads/
+uploads/
+processed/
+outputs/
+MIS/processing_queue.json
+MIS/clients.db
+.DS_Store
+*.log

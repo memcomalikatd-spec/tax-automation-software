@@ -1,0 +1,349 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Tax Return PDF Extraction</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1200px;
+            margin: 20px auto;
+            padding: 20px;
+            background: #1a1a1a;
+            color: #fff;
+        }
+        .container {
+            background: #2a2a2a;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+        }
+        h1 {
+            color: #4a9eff;
+            margin-bottom: 20px;
+        }
+        .upload-area {
+            border: 2px dashed #4a9eff;
+            padding: 40px;
+            text-align: center;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        .upload-area:hover {
+            background: #333;
+            border-color: #6ab0ff;
+        }
+        .upload-area.dragover {
+            background: #333;
+            border-color: #6ab0ff;
+        }
+        input[type="file"] {
+            display: none;
+        }
+        .results {
+            margin-top: 30px;
+        }
+        .result-section {
+            background: #333;
+            padding: 20px;
+            margin-bottom: 15px;
+            border-radius: 8px;
+            border-left: 4px solid #4a9eff;
+        }
+        .result-section h3 {
+            margin-top: 0;
+            color: #4a9eff;
+        }
+        .success {
+            border-left-color: #4ade80;
+        }
+        .success h3 {
+            color: #4ade80;
+        }
+        .error {
+            border-left-color: #f87171;
+        }
+        .error h3 {
+            color: #f87171;
+        }
+        .extracted-text {
+            background: #1a1a1a;
+            padding: 15px;
+            border-radius: 5px;
+            max-height: 300px;
+            overflow-y: auto;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+        }
+        .loading {
+            text-align: center;
+            padding: 20px;
+            color: #4a9eff;
+        }
+        .spinner {
+            border: 3px solid #333;
+            border-top: 3px solid #4a9eff;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 20px auto;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        .field-value {
+            background: #1a1a1a;
+            padding: 10px;
+            border-radius: 5px;
+            margin-top: 5px;
+            font-weight: bold;
+            color: #4ade80;
+        }
+        .field-value.empty {
+            color: #f87171;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔍 Tax Return PDF Extraction Debugger</h1>
+        <p>Upload a tax return PDF to test the extraction patterns</p>
+        
+        <div class="upload-area" id="uploadArea">
+            <p style="font-size: 48px; margin: 0;">📄</p>
+            <p style="margin: 10px 0;">Click to select or drag & drop a PDF file</p>
+            <input type="file" id="fileInput" accept=".pdf">
+        </div>
+
+        <div id="results" class="results"></div>
+    </div>
+
+    <script>
+        // Set up PDF.js worker
+        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+
+        const uploadArea = document.getElementById('uploadArea');
+        const fileInput = document.getElementById('fileInput');
+        const resultsDiv = document.getElementById('results');
+
+        // Click to upload
+        uploadArea.addEventListener('click', () => fileInput.click());
+
+        // Drag and drop
+        uploadArea.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            uploadArea.classList.add('dragover');
+        });
+
+        uploadArea.addEventListener('dragleave', () => {
+            uploadArea.classList.remove('dragover');
+        });
+
+        uploadArea.addEventListener('drop', (e) => {
+            e.preventDefault();
+            uploadArea.classList.remove('dragover');
+            const files = e.dataTransfer.files;
+            if (files.length > 0) {
+                handleFile(files[0]);
+            }
+        });
+
+        fileInput.addEventListener('change', (e) => {
+            if (e.target.files.length > 0) {
+                handleFile(e.target.files[0]);
+            }
+        });
+
+        async function handleFile(file) {
+            if (!file.name.toLowerCase().endsWith('.pdf')) {
+                alert('Please select a PDF file');
+                return;
+            }
+
+            resultsDiv.innerHTML = '<div class="loading"><div class="spinner"></div><p>Extracting data from PDF...</p></div>';
+
+            try {
+                const extractedData = await extractDataFromPDF(file);
+                displayResults(extractedData);
+            } catch (error) {
+                resultsDiv.innerHTML = `
+                    <div class="result-section error">
+                        <h3>❌ Error</h3>
+                        <p>${error.message}</p>
+                    </div>
+                `;
+            }
+        }
+
+        async function extractTextFromPDF(file) {
+            const arrayBuffer = await file.arrayBuffer();
+            const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+            
+            let fullText = '';
+            
+            for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
+                const page = await pdf.getPage(pageNum);
+                const textContent = await page.getTextContent();
+                
+                let lastY = null;
+                let pageText = '';
+                
+                textContent.items.forEach((item, index) => {
+                    const currentY = item.transform[5];
+                    
+                    if (lastY !== null && Math.abs(currentY - lastY) > 5) {
+                        pageText += '\n';
+                    } else if (index > 0 && item.str.trim()) {
+                        pageText += ' ';
+                    }
+                    
+                    pageText += item.str;
+                    lastY = currentY;
+                });
+                
+                fullText += pageText + '\n\n';
+            }
+            
+            return fullText;
+        }
+
+        function extractName(text) {
+            const namePatterns = [
+                // Pattern 1: Name appears before "Registration No" (common in Pakistani tax returns)
+                /(?:Mansehra|Province|City|District|Address[^\n]*\n[^\n]*\n[^\n]*\n)\s*([A-Z][a-z]+(?:\s+[A-Z]?[a-z]+)*)\s+Registration\s+No/i,
+                /Name\s*:?\s*\n?\s*([A-Z][A-Za-z\s.'-]{2,50}?)\s*\n\s*Registration/i,
+                /Name\s*:\s*\n?\s*([A-Z][A-Za-z\s.'-]{2,50}?)\s+Registration/i,
+                /Name\s*:?\s*\n?\s*([A-Z][A-Za-z\s.'-]{2,50}?)\s+(?:CNIC|Registration|NTN)/i,
+                /Name\s*:?\s*\n?\s*([A-Z][A-Za-z\s.'-]{2,50}?)\s+Address/i,
+                /Name\s*:?\s*\n\s*([A-Z][A-Za-z\s.'-]{2,50}?)\s*\n\s*(?:Address|Registration|CNIC|Father|S\/o|D\/o|W\/o)/i,
+                /Taxpayer\s+Name\s*:?\s*\n?\s*([A-Z][A-Za-z\s.'-]{2,50}?)\s*(?:\n|Registration|Address|CNIC|NTN|Tax)/i,
+                // Pattern for scrambled layout: name appears after address before Registration
+                /Name\s*:[\s\S]{0,300}?([a-z]+\s+[a-z]+)\s+Registration\s+No/i,
+                /Name\s*:\s*([A-Z][A-Za-z\s.'-]+?)(?=\s*(?:Registration|Address|CNIC|NTN|Father|S\/o|D\/o|W\/o|\n\s*\n))/i,
+            ];
+            
+            for (const pattern of namePatterns) {
+                const match = text.match(pattern);
+                if (match && match[1]) {
+                    let name = match[1].trim();
+                    name = name.replace(/\s+/g, ' ');
+                    name = name.replace(/[,;:.]+$/, '');
+                    name = name.replace(/\s*(Address|Registration|Contact|NEAR|Village|CNIC|NTN|Tax|Year|No|Father|S\/o|D\/o|W\/o).*$/i, '');
+                    
+                    if (name === name.toUpperCase() && name.length > 3) {
+                        name = name.split(' ')
+                            .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+                            .join(' ');
+                    }
+                    
+                    name = name.trim();
+                    
+                    if (name.length >= 2 && name.length <= 50 && /^[A-Za-z\s.'"-]+$/.test(name) && !/\d/.test(name)) {
+                        return name;
+                    }
+                }
+            }
+            
+            return null;
+        }
+
+        function extractCNICOrNTN(text) {
+            const ntnPatterns = [
+                // Pattern for scrambled layout: Tax Year followed by number
+                /Tax\s+Year\s*:?\s*\n?\s*(\d{10,13})/i,
+                /Registration\s+No\.?\s*:?\s*\n\s*(\d{10,13})/i,
+                /Registration\s+No\.?\s*(\d{10,13})/i,
+                /Registration\s+No\.?\s*:?\s*(\d{10,13})/i,
+                /Registration[:\s]*No\.?[:\s\n]*(\d{10,13})/i,
+                /NTN\s*:?\s*\n?\s*(\d{7,13})/i,
+            ];
+            
+            for (const pattern of ntnPatterns) {
+                const match = text.match(pattern);
+                if (match && match[1]) {
+                    let ntn = match[1].replace(/\s/g, '');
+                    if (ntn.length >= 7 && ntn.length <= 13) {
+                        return ntn;
+                    }
+                }
+            }
+            
+            return null;
+        }
+
+        function extractTaxYear(text) {
+            const taxYearPatterns = [
+                // Pattern for scrambled layout: Period followed by year
+                /Period\s*:?\s*\n?\s*(\d{4})/i,
+                /Tax\s+Year\s*:?\s*\n\s*(\d{4})/i,
+                /Tax\s+Year\s*:\s*(\d{4})/i,
+                /Tax\s+Year\s*[:\-]?\s*(\d{4})/i,
+            ];
+            
+            for (const pattern of taxYearPatterns) {
+                const match = text.match(pattern);
+                if (match && match[1]) {
+                    const year = parseInt(match[1]);
+                    const currentYear = new Date().getFullYear();
+                    if (year >= 2000 && year <= currentYear + 1) {
+                        return year.toString();
+                    }
+                }
+            }
+            
+            return null;
+        }
+
+        async function extractDataFromPDF(file) {
+            const text = await extractTextFromPDF(file);
+            const name = extractName(text);
+            const cnicNtn = extractCNICOrNTN(text);
+            const taxYear = extractTaxYear(text);
+            
+            return {
+                name: name || '',
+                cnicNtn: cnicNtn || '',
+                taxYear: taxYear || '',
+                extractedText: text,
+                success: !!(name && cnicNtn && taxYear)
+            };
+        }
+
+        function displayResults(data) {
+            const successClass = data.success ? 'success' : 'error';
+            const statusIcon = data.success ? '✅' : '⚠️';
+            
+            resultsDiv.innerHTML = `
+                <div class="result-section ${successClass}">
+                    <h3>${statusIcon} Extraction ${data.success ? 'Successful' : 'Incomplete'}</h3>
+                </div>
+
+                <div class="result-section">
+                    <h3>📝 Extracted Fields</h3>
+                    <p><strong>Name:</strong></p>
+                    <div class="field-value ${data.name ? '' : 'empty'}">${data.name || '❌ Not found'}</div>
+                    
+                    <p style="margin-top: 15px;"><strong>CNIC/NTN:</strong></p>
+                    <div class="field-value ${data.cnicNtn ? '' : 'empty'}">${data.cnicNtn || '❌ Not found'}</div>
+                    
+                    <p style="margin-top: 15px;"><strong>Tax Year:</strong></p>
+                    <div class="field-value ${data.taxYear ? '' : 'empty'}">${data.taxYear || '❌ Not found'}</div>
+                </div>
+
+                <div class="result-section">
+                    <h3>📄 Extracted Text (First 2000 characters)</h3>
+                    <div class="extracted-text">${data.extractedText.substring(0, 2000)}</div>
+                </div>
+            `;
+        }
+    </script>
+</body>
+</html>

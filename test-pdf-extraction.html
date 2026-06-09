@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PDF Extraction Test</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.0.379/pdf.min.mjs" type="module"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 20px;
+        }
+        .result {
+            background: #f5f5f5;
+            padding: 15px;
+            margin: 10px 0;
+            border-radius: 5px;
+        }
+        button {
+            background: #4CAF50;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+        button:hover {
+            background: #45a049;
+        }
+        .error {
+            background: #ffebee;
+            color: #c62828;
+        }
+        .success {
+            background: #e8f5e9;
+            color: #2e7d32;
+        }
+        pre {
+            white-space: pre-wrap;
+            word-wrap: break-word;
+        }
+    </style>
+</head>
+<body>
+    <h1>PDF Data Extraction Test</h1>
+    <p>Select a PDF file to test the extraction:</p>
+    <input type="file" id="fileInput" accept=".pdf">
+    <button onclick="testExtraction()">Test Extraction</button>
+    
+    <div id="results"></div>
+
+    <script type="module">
+        import * as pdfjsLib from 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.0.379/pdf.min.mjs';
+        
+        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.0.379/pdf.worker.min.mjs';
+
+        window.testExtraction = async function() {
+            const fileInput = document.getElementById('fileInput');
+            const resultsDiv = document.getElementById('results');
+            
+            if (!fileInput.files || fileInput.files.length === 0) {
+                resultsDiv.innerHTML = '<div class="result error">Please select a PDF file first.</div>';
+                return;
+            }
+            
+            const file = fileInput.files[0];
+            resultsDiv.innerHTML = '<div class="result">Processing...</div>';
+            
+            try {
+                // Extract text
+                const arrayBuffer = await file.arrayBuffer();
+                const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+                
+                let fullText = '';
+                for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
+                    const page = await pdf.getPage(pageNum);
+                    const textContent = await page.getTextContent();
+                    const pageText = textContent.items.map(item => item.str).join(' ');
+                    fullText += pageText + '\n';
+                }
+                
+                // Extract Name
+                const namePatterns = [
+                    // Pattern 1: "Name:" followed by name (exact format from sample)
+                    /Name\s*:\s*([A-Z][A-Z\s]+?)(?:\s+Registration|\s+Address|\s+CNIC|\s+NTN|\s+Tax|\n)/i,
+                    /ACKNOWLEDGEMENT\s+SLIP[\s\S]*?Name\s*:?\s*[\s\n]*([A-Z][A-Z\s]+?)[\s\n]+(?:Address|Registration|NEAR)/i,
+                    /Name\s*:?\s*[\s\n]*([A-Z][A-Z\s]{3,50})[\s\n]+(?:Address|Registration|CNIC|NTN|Tax)/i,
+                ];
+                
+                let name = null;
+                for (const pattern of namePatterns) {
+                    const match = fullText.match(pattern);
+                    if (match && match[1]) {
+                        name = match[1].trim().replace(/[\s\n]+/g, ' ');
+                        name = name.replace(/\s*(Address|Registration|Contact|NEAR|Village|CNIC|NTN|Tax|Year).*$/i, '');
+                        if (name === name.toUpperCase() && name.length > 3) {
+                            name = name.split(' ')
+                                .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+                                .join(' ');
+                        }
+                        name = name.trim();
+                        if (name.length >= 3 && name.length <= 50 && /^[A-Za-z\s]+$/.test(name)) {
+                            break;
+                        } else {
+                            name = null;
+                        }
+                    }
+                }
+                
+                // Extract CNIC/NTN
+                const ntnPatterns = [
+                    // Pattern 1: "Registration No :" with spaces (exact format from sample)
+                    /Registration\s+No\s*:\s*(\d{10,13})/i,
+                    /Registration\s+No\s*[:\-]?\s*[\s\n]*(\d{10,13})/i,
+                    /NTN\s*[:\-]?\s*(\d{7,13})/i,
+                ];
+                
+                let cnicNtn = null;
+                for (const pattern of ntnPatterns) {
+                    const match = fullText.match(pattern);
+                    if (match && match[1]) {
+                        cnicNtn = match[1].replace(/\s/g, '');
+                        if (cnicNtn.length >= 7 && cnicNtn.length <= 13) {
+                            break;
+                        } else {
+                            cnicNtn = null;
+                        }
+                    }
+                }
+                
+                // Extract Tax Year
+                const taxYearPatterns = [
+                    // Pattern 1: "Tax Year :" with spaces (exact format from sample)
+                    /Tax\s+Year\s*:\s*(\d{4})/i,
+                    /Tax\s+Year\s*[:\-]?\s*(\d{4})/i,
+                    /(?:Assessment|Income)\s+Year\s*[:\-]?\s*(\d{4})/i,
+                ];
+                
+                let taxYear = null;
+                for (const pattern of taxYearPatterns) {
+                    const match = fullText.match(pattern);
+                    if (match && match[1]) {
+                        const year = parseInt(match[1]);
+                        if (year >= 2000 && year <= 2027) {
+                            taxYear = year.toString();
+                            break;
+                        }
+                    }
+                }
+                
+                // If not found, look for any year
+                if (!taxYear) {
+                    const yearMatches = fullText.substring(0, 1000).match(/\b(20\d{2})\b/g);
+                    if (yearMatches && yearMatches.length > 0) {
+                        const validYears = yearMatches
+                            .map(y => parseInt(y))
+                            .filter(year => year >= 2000 && year <= 2027)
+                            .sort((a, b) => b - a);
+                        if (validYears.length > 0) {
+                            taxYear = validYears[0].toString();
+                        }
+                    }
+                }
+                
+                // Display results
+                const success = !!(name && cnicNtn && taxYear);
+                resultsDiv.innerHTML = `
+                    <div class="result ${success ? 'success' : 'error'}">
+                        <h3>Extraction Results:</h3>
+                        <p><strong>Name:</strong> ${name || 'Not found'}</p>
+                        <p><strong>CNIC/NTN:</strong> ${cnicNtn || 'Not found'}</p>
+                        <p><strong>Tax Year:</strong> ${taxYear || 'Not found'}</p>
+                        <p><strong>Status:</strong> ${success ? '✅ Success' : '❌ Failed'}</p>
+                    </div>
+                    <div class="result">
+                        <h3>Full Extracted Text:</h3>
+                        <textarea style="width: 100%; height: 400px; font-family: monospace; font-size: 12px;">${fullText}</textarea>
+                    </div>
+                    <div class="result">
+                        <h3>Debug Info:</h3>
+                        <p><strong>Total text length:</strong> ${fullText.length} characters</p>
+                        <p><strong>Number of pages:</strong> ${pdf.numPages}</p>
+                        <button onclick="navigator.clipboard.writeText(document.querySelector('textarea').value)">Copy Full Text</button>
+                    </div>
+                `;
+                
+            } catch (error) {
+                resultsDiv.innerHTML = `<div class="result error">
+                    <h3>Error:</h3>
+                    <p>${error.message}</p>
+                    <pre>${error.stack}</pre>
+                </div>`;
+            }
+        };
+    </script>
+</body>
+</html>

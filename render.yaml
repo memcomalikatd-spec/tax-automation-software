@@ -1,0 +1,25 @@
+services:
+  - type: web
+    name: mis-backend
+    runtime: python
+    rootDir: MIS
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn MISBACKEND:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.0
+
+  - type: web
+    name: pdf-server
+    runtime: node
+    buildCommand: npm install
+    startCommand: node pdf-extraction-server.js
+    healthCheckPath: /health
+
+  - type: web
+    name: email-service
+    runtime: node
+    buildCommand: npm install
+    startCommand: node email-service.js
+    healthCheckPath: /health

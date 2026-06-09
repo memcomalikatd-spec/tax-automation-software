@@ -1,0 +1,130 @@
+/**
+ * Mobile-Optimized Styles for Notice Upload
+ * Responsive design with touch-friendly interactions
+ */
+
+/* Mobile-first responsive breakpoints */
+@media (max-width: 768px) {
+  /* Touch-friendly tap targets - minimum 44x44px */
+  .notice-upload-button,
+  .notice-action-button {
+    min-width: 44px;
+    min-height: 44px;
+    padding: 12px 16px;
+  }
+
+  /* Stack upload options vertically on mobile */
+  .upload-options-grid {
+    grid-template-columns: 1fr !important;
+    gap: 12px;
+  }
+
+  /* Full-width modal on mobile */
+  .notice-upload-modal {
+    width: 100vw;
+    height: 100vh;
+    max-height: 100vh;
+    border-radius: 0;
+    margin: 0;
+  }
+
+  /* Larger touch targets for file items */
+  .file-item {
+    padding: 16px;
+    min-height: 80px;
+  }
+
+  /* Simplified layout for extracted data */
+  .extracted-data-grid {
+    grid-template-columns: 1fr !important;
+  }
+
+  /* Bottom sheet style for mobile */
+  .upload-actions {
+    position: sticky;
+    bottom: 0;
+    background: rgba(17, 24, 39, 0.98);
+    backdrop-filter: blur(20px);
+    padding: 16px;
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+  }
+
+  /* Swipe indicator for dismissible modals */
+  .swipe-indicator {
+    width: 40px;
+    height: 4px;
+    background: rgba(255, 255, 255, 0.3);
+    border-radius: 2px;
+    margin: 8px auto;
+  }
+}
+
+/* Tablet optimization */
+@media (min-width: 769px) and (max-width: 1024px) {
+  .upload-options-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .notice-upload-modal {
+    max-width: 90vw;
+  }
+}
+
+/* Reduce animations for users who prefer reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+
+  .confetti-canvas {
+    display: none !important;
+  }
+}
+
+/* Dark mode optimizations */
+@media (prefers-color-scheme: dark) {
+  .notice-upload-modal {
+    background: linear-gradient(135deg, rgba(17, 24, 39, 0.98) 0%, rgba(31, 41, 55, 0.98) 100%);
+  }
+}
+
+/* High contrast mode */
+@media (prefers-contrast: high) {
+  .notice-upload-button {
+    border: 2px solid currentColor;
+  }
+
+  .file-item {
+    border: 2px solid rgba(255, 255, 255, 0.3);
+  }
+}
+
+/* Landscape mobile optimization */
+@media (max-width: 768px) and (orientation: landscape) {
+  .notice-upload-modal {
+    max-height: 100vh;
+    overflow-y: auto;
+  }
+
+  .camera-view {
+    height: 50vh;
+  }
+}
+
+/* iOS safe area support */
+@supports (padding: max(0px)) {
+  .notice-upload-modal {
+    padding-left: max(16px, env(safe-area-inset-left));
+    padding-right: max(16px, env(safe-area-inset-right));
+    padding-bottom: max(16px, env(safe-area-inset-bottom));
+  }
+}
+
+/* Android navigation bar spacing */
+@media (display-mode: standalone) {
+  .upload-actions {
+    padding-bottom: calc(16px + env(safe-area-inset-bottom));
+  }
+}
