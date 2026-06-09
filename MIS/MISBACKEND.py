@@ -328,29 +328,63 @@ def process_excel_file(job_id: str, file_path: str, original_filename: str):
         wb = read_excel_to_openpyxl(file_path)
         ws = wb.active
 
+        # Find the actual header row by scanning all rows
+        header_row_idx = 1
+        header_keywords = ["registration no", "identification no", "name", "wa name", "ntn"]
+        for row_idx in range(1, min(ws.max_row + 1, 20)):
+            row_vals = [str(cell.value).strip().lower() if cell.value else "" for cell in ws[row_idx]]
+            match_count = sum(1 for kw in header_keywords if any(kw in v for v in row_vals))
+            if match_count >= 2:
+                header_row_idx = row_idx
+                break
+
+        # Delete metadata rows above header so header becomes row 1
+        if header_row_idx > 1:
+            for _ in range(header_row_idx - 1, 0, -1):
+                ws.delete_rows(1)
+            processing_queue[job_id]["message"] = f"Removed {header_row_idx - 1} metadata row(s), found header"
+
         # Look up client info from Registration No
         processing_queue[job_id]["message"] = "Looking up client information..."
         client_name = ""
         client_ntn = ""
         reg_number = ""
         tax_year = ""
-        header_row = ws[1]
 
-        # Find Registration No and Tax Year columns by header (flexible match)
-        reg_col_idx = None
-        tax_year_col_idx = None
-        for idx, cell in enumerate(header_row, start=1):
+        # Map column headers to known fields
+        col_map = {}
+        for idx, cell in enumerate(ws[1], start=1):
             if cell.value:
-                header_text = str(cell.value).strip().lower()
-                if "registration no" in header_text:
-                    reg_col_idx = idx
-                elif "tax year" in header_text:
-                    tax_year_col_idx = idx
+                h = str(cell.value).strip().lower()
+                if "registration no" in h or "reg no" in h or h == "ntn" or "ntn" in h:
+                    col_map["reg_no"] = idx
+                if "name" in h or "title" in h or "party" in h:
+                    col_map["name"] = idx
+                if "identification no" in h or "nic no" in h or "cnic" in h:
+                    col_map["cnic"] = idx
+                if "tax year" in h or "assessed" in h:
+                    col_map["tax_year"] = idx
+                if "transaction date" in h or "payment date" in h or "date" in h:
+                    col_map["date"] = idx
+                if "tax collectible" in h or "tax deductible" in h or "taxable amount" in h or "paid amount" in h or "amount" in h:
+                    col_map["amount"] = idx
+                if "wa name" in h:
+                    col_map["wa_name"] = idx
+                if "section" in h:
+                    col_map["section"] = idx
+                if "tax month" in h:
+                    col_map["tax_month"] = idx
+                if "exemption code" in h:
+                    col_map["exemption_code"] = idx
+                if "validation status" in h:
+                    col_map["validation_status"] = idx
+
+        data_start_row = 2
 
         # Read first non-empty Registration No
-        if reg_col_idx:
-            for row_idx in range(2, ws.max_row + 1):
-                val = ws.cell(row_idx, reg_col_idx).value
+        if col_map.get("reg_no"):
+            for row_idx in range(data_start_row, ws.max_row + 1):
+                val = ws.cell(row_idx, col_map["reg_no"]).value
                 if val is not None:
                     if isinstance(val, float):
                         reg_number = str(int(round(val))) if abs(val) >= 1e10 else str(int(val))
@@ -363,10 +397,10 @@ def process_excel_file(job_id: str, file_path: str, original_filename: str):
                     if reg_number:
                         break
 
-        # Read first non-empty Tax Year from the same data row
-        if tax_year_col_idx and reg_col_idx:
-            for row_idx in range(2, ws.max_row + 1):
-                val = ws.cell(row_idx, tax_year_col_idx).value
+        # Read tax year from explicit column or extract from date
+        if col_map.get("tax_year"):
+            for row_idx in range(data_start_row, ws.max_row + 1):
+                val = ws.cell(row_idx, col_map["tax_year"]).value
                 if val is not None:
                     if isinstance(val, (int, float)):
                         tax_year = str(int(val)) if val == int(val) else str(val)
@@ -375,12 +409,33 @@ def process_excel_file(job_id: str, file_path: str, original_filename: str):
                         if ty:
                             tax_year = ty
                     break
+        elif col_map.get("date"):
+            # Extract year from first date value
+            for row_idx in range(data_start_row, ws.max_row + 1):
+                val = ws.cell(row_idx, col_map["date"]).value
+                if val is not None:
+                    import re
+                    ds = str(val).strip()
+                    m = re.search(r'20\d{2}', ds)
+                    if m:
+                        tax_year = m.group()
+                        break
+
+        # Read client name directly from data if NAME column exists
+        if col_map.get("name"):
+            for row_idx in range(data_start_row, ws.max_row + 1):
+                val = ws.cell(row_idx, col_map["name"]).value
+                if val is not None:
+                    raw = str(val).strip()
+                    if raw:
+                        client_name = raw
+                        break
 
         # Look up client in database
         if reg_number:
             client = find_client_by_reg_no(reg_number)
             if client:
-                client_name = client.get("name", "")
+                client_name = client.get("name", "") or client_name
                 client_ntn = client.get("ntn", "")
                 processing_queue[job_id]["message"] = f"Found client: {client_name}"
 
@@ -393,23 +448,34 @@ def process_excel_file(job_id: str, file_path: str, original_filename: str):
         processing_queue[job_id]["message"] = "Removing unnecessary columns..."
 
         # Step 1: Keep only required columns
-        keep_column_names = [
-            "wa name", "registration no", "section", "tax month",
-            "taxable amount", "paid amount", "payment date", "tax year"
-        ]
+        keep_alias_map = {
+            "wa name": ["wa name", "name"],
+            "registration no": ["registration no", "reg no", "ntn"],
+            "identification no": ["identification no", "nic no", "cnic"],
+            "section": ["section", "code"],
+            "tax month": ["tax month"],
+            "taxable amount": ["taxable amount", " amount"],
+            "paid amount": ["paid amount", "tax collectible", "tax deductible"],
+            "payment date": ["payment date", "transaction date"],
+            "exemption code": ["exemption code", "exemption"],
+            "validation status": ["validation status", "status"],
+            "tax year": ["tax year", "assessed"],
+            "date": [" date"],
+        }
 
         # Find column indices to keep (flexible header matching)
-        header_row = ws[1]
         columns_to_keep = []
-        column_map = {}
+        seen = set()
 
-        for idx, cell in enumerate(header_row, start=1):
+        for idx, cell in enumerate(ws[1], start=1):
             if cell.value:
                 header_normalized = str(cell.value).strip().lower()
-                for keep_name in keep_column_names:
-                    if header_normalized == keep_name:
-                        columns_to_keep.append(idx)
-                        column_map[cell.value] = idx
+                for std_name, aliases in keep_alias_map.items():
+                    if any(alias in header_normalized for alias in aliases):
+                        key = (std_name, header_normalized)
+                        if key not in seen:
+                            columns_to_keep.append(idx)
+                            seen.add(key)
                         break
 
         # Delete columns not in keep list (in reverse to avoid index shifting)
