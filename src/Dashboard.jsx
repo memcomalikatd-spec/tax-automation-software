@@ -385,7 +385,7 @@ const Dashboard = () => {
   const [isValidating, setIsValidating] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
   const [importProgress, setImportProgress] = useState(0);
-  const API_BASE = 'http://localhost:3003';
+  const API_BASE = '';
   const [clients, setClients] = useState([]);
   const [clientsLoading, setClientsLoading] = useState(true);
 
@@ -2636,7 +2636,7 @@ const Dashboard = () => {
         formData.append('files', file);
       });
 
-      const response = await fetch('http://localhost:3003/upload', {
+      const response = await fetch('/upload', {
         method: 'POST',
         body: formData
       });
@@ -2672,7 +2672,7 @@ const Dashboard = () => {
   const pollJobStatus = async (jobId) => {
     const pollInterval = setInterval(async () => {
       try {
-        const response = await fetch(`http://localhost:3003/status/${jobId}`);
+        const response = await fetch(`/status/${jobId}`);
         if (!response.ok) {
           clearInterval(pollInterval);
           return;
@@ -2732,7 +2732,7 @@ const Dashboard = () => {
   // Delete job
   const handleDeleteJob = async (jobId) => {
     try {
-      const response = await fetch(`http://localhost:3003/job/${jobId}`, {
+      const response = await fetch(`/job/${jobId}`, {
         method: 'DELETE'
       });
 
@@ -2748,7 +2748,7 @@ const Dashboard = () => {
   // Download saved payment file
   const handleDownloadSavedFile = async (entry) => {
     try {
-      const response = await fetch(`http://localhost:3003${entry.download_url}`);
+      const response = await fetch(`${entry.download_url}`);
       if (!response.ok) throw new Error('Download failed');
 
       const blob = await response.blob();
@@ -2769,7 +2769,7 @@ const Dashboard = () => {
 
   const handlePreviewExcelFile = async (entry) => {
     try {
-      const response = await fetch(`http://localhost:3003${entry.download_url}`);
+      const response = await fetch(`${entry.download_url}`);
       if (!response.ok) throw new Error('Preview failed');
       const arrayBuffer = await response.arrayBuffer();
       const workbook = XLSX.read(arrayBuffer, { type: 'array' });

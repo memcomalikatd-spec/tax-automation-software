@@ -1,0 +1,31 @@
+{
+  "rewrites": [
+    { "source": "/api/clients/:path*", "destination": "/api/index.py" },
+    { "source": "/api/returns/:path*", "destination": "/api/index.py" },
+    { "source": "/upload", "destination": "/api/index.py" },
+    { "source": "/status/:path*", "destination": "/api/index.py" },
+    { "source": "/job/:path*", "destination": "/api/index.py" },
+    { "source": "/download/:path*", "destination": "/api/index.py" },
+    { "source": "/health", "destination": "/api/index.py" },
+    { "source": "/api/email/:path*", "destination": "/api/email" },
+    { "source": "/api/notices/:path*", "destination": "/api/notices" },
+    { "source": "/(.*)", "destination": "/index.html" }
+  ],
+  "functions": {
+    "api/index.py": {
+      "runtime": "vercel-python@3.11.0",
+      "memory": 512,
+      "maxDuration": 30
+    },
+    "api/email.js": {
+      "runtime": "@vercel/node@4",
+      "memory": 256,
+      "maxDuration": 30
+    },
+    "api/notices.js": {
+      "runtime": "@vercel/node@4",
+      "memory": 256,
+      "maxDuration": 30
+    }
+  }
+}

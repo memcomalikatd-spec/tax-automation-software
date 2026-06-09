@@ -16,7 +16,7 @@ const ClientLinkingModal = ({ isOpen, onClose, returnData, onLink }) => {
 
   const loadClients = async () => {
     try {
-      const response = await fetch('http://localhost:3003/api/clients');
+      const response = await fetch('/api/clients');
       const data = await response.json();
       setClients(data);
       setFilteredClients(data);

@@ -1,4 +1,4 @@
-const API_BASE = 'http://localhost:3003';
+const API_BASE = '';
 
 export async function fetchReturns(search) {
   const params = search ? `?search=${encodeURIComponent(search)}` : '';

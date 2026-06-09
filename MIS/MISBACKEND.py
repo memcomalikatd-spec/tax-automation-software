@@ -31,8 +31,12 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Environment detection for Vercel
+IS_VERCEL = os.environ.get('VERCEL') == '1'
+DATA_DIR = "/tmp" if IS_VERCEL else os.path.dirname(os.path.abspath(__file__))
+
 # SQLite Database
-DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "clients.db")
+DB_PATH = os.path.join(DATA_DIR, "clients.db")
 
 def get_db():
     db = sqlite3.connect(DB_PATH)
@@ -163,10 +167,10 @@ class ClientModel(BaseModel):
     timeline: list = []
 
 # Directories
-UPLOAD_DIR = "uploads"
-OUTPUT_DIR = "outputs"
-PROCESSED_DIR = "processed"
-QUEUE_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "processing_queue.json")
+UPLOAD_DIR = os.path.join(DATA_DIR, "uploads")
+OUTPUT_DIR = os.path.join(DATA_DIR, "outputs")
+PROCESSED_DIR = os.path.join(DATA_DIR, "processed")
+QUEUE_FILE = os.path.join(DATA_DIR, "processing_queue.json")
 
 for dir_path in [UPLOAD_DIR, OUTPUT_DIR, PROCESSED_DIR]:
     os.makedirs(dir_path, exist_ok=True)
